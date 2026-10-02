@@ -72,8 +72,23 @@ class BladeComponentTest extends TestCase
             'meta' => ImageMeta::fromArray(['alt' => 'x', 'focal' => ['x' => 30, 'y' => 70]]),
         ]);
 
-        $this->assertStringContainsString('style="object-position: 30% 70%"', $html);
+        $this->assertStringContainsString('style="object-position: 30% 70%;"', $html);
         $this->assertStringContainsString('class="object-cover"', $html);
+    }
+
+    public function test_caller_attributes_are_merged_never_duplicated(): void
+    {
+        $html = $this->html('<x-image-meta::img src="/a.jpg" :meta="$meta" style="aspect-ratio: 16/9" alt="Override" title="Mine" />', [
+            'meta' => ImageMeta::fromArray(['alt' => 'Stored', 'title' => 'Stored title', 'focal' => ['x' => 30, 'y' => 70]]),
+        ]);
+
+        $this->assertSame(1, substr_count($html, 'style='));
+        $this->assertSame(1, substr_count($html, ' alt='));
+        $this->assertSame(1, substr_count($html, ' title='));
+        $this->assertStringContainsString('aspect-ratio: 16/9;', $html);
+        $this->assertStringContainsString('object-position: 30% 70%;', $html);
+        $this->assertStringContainsString('alt="Override"', $html);
+        $this->assertStringContainsString('title="Mine"', $html);
     }
 
     public function test_without_a_focal_point_there_is_no_style(): void

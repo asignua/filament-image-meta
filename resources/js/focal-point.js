@@ -117,7 +117,8 @@ export default function imageMetaFocalPoint({ state, labels = {}, step = 1, bigS
                 ArrowDown: [0, amount],
             }
 
-            if (event.key === 'Home' || event.key === 'Escape') {
+            // Not Escape: inside a modal it closes the dialog (and means "cancel" there).
+            if (event.key === 'Home') {
                 event.preventDefault()
                 this.reset()
 
