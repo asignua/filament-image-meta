@@ -117,6 +117,8 @@ class RequireAltTest extends TestCase
 
     public function test_the_rule_also_guards_a_media_library_upload(): void
     {
+        $this->requireMediaLibrary();
+
         $form = Livewire::test(ArticleForm::class, ['options' => ['requireAlt' => true]]);
         $form->set('data.images', [UploadedFile::fake()->image('a.jpg')]);
 

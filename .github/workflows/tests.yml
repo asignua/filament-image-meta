@@ -25,6 +25,21 @@ jobs:
       - run: composer update --prefer-dist --no-interaction
       - run: vendor/bin/phpunit
 
+  without-media-library:
+    runs-on: ubuntu-latest
+    name: PHP 8.4 · without spatie/laravel-medialibrary
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # 2.37.2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, intl
+          coverage: none
+      - run: composer remove --dev filament/spatie-laravel-media-library-plugin spatie/laravel-medialibrary --no-interaction --no-update
+      - run: composer update --prefer-dist --no-interaction
+      # The media-library tests skip themselves; everything else must pass without the package.
+      - run: vendor/bin/phpunit
+
   static:
     runs-on: ubuntu-latest
     steps:

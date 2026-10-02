@@ -49,7 +49,8 @@ abstract class TestCase extends Orchestra
             FormsServiceProvider::class,
             InfolistsServiceProvider::class,
             LivewireServiceProvider::class,
-            MediaLibraryServiceProvider::class,
+            // spatie/laravel-medialibrary is only suggested: one CI job runs without it.
+            ...(self::hasMediaLibrary() ? [MediaLibraryServiceProvider::class] : []),
             NotificationsServiceProvider::class,
             SchemasServiceProvider::class,
             SupportServiceProvider::class,
@@ -76,6 +77,20 @@ abstract class TestCase extends Orchestra
     {
         $this->loadMigrationsFrom(__DIR__.'/../workbench/database/migrations');
 
-        (include __DIR__.'/../vendor/spatie/laravel-medialibrary/database/migrations/create_media_table.php.stub')->up();
+        if (self::hasMediaLibrary()) {
+            (include __DIR__.'/../vendor/spatie/laravel-medialibrary/database/migrations/create_media_table.php.stub')->up();
+        }
+    }
+
+    public static function hasMediaLibrary(): bool
+    {
+        return class_exists(MediaLibraryServiceProvider::class);
+    }
+
+    protected function requireMediaLibrary(): void
+    {
+        if (!self::hasMediaLibrary()) {
+            $this->markTestSkipped('spatie/laravel-medialibrary is not installed.');
+        }
     }
 }
