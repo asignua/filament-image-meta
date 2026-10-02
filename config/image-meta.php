@@ -29,9 +29,9 @@ return [
     | Sibling attribute for a plain FileUpload
     |--------------------------------------------------------------------------
     |
-    | `FileUpload::make('photo')->imageMeta()` writes the details to `photo_meta`
-    | (a JSON column cast to `array`, keyed by the stored file path). Change the suffix here,
-    | or pass `statePath:` to one field.
+    | `ImageMetaUpload::make(FileUpload::make('photo'), ...)` writes the details to
+    | `photo_meta` (a JSON column cast to `array`, keyed by the stored file path). Change the
+    | suffix here, or pass `statePath: 'other_column'` to `ImageMetaUpload::make()` for one field.
     |
     */
     'meta_suffix' => '_meta',

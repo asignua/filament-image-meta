@@ -68,8 +68,15 @@ class ImageMetaPanel extends Field
         $this->storesInMedia = $storesInMedia;
 
         // A media item is written by the upload's own relationship save (see ImageMetaUpload);
-        // the panel is not a column of the model then.
-        $this->dehydrated(!$storesInMedia);
+        // the panel is not a column of the model then. A plain upload's details are saved only
+        // when the upload itself is: a disabled or hidden upload must not have its details
+        // rewritten through the panel.
+        $this->dehydrated(static fn (self $component): bool => !$storesInMedia && $component->getUpload()->isDehydrated());
+
+        // The panel mirrors the upload: whoever may not see or change the files may not see or
+        // change their details either.
+        $this->disabled(static fn (self $component): bool => $component->getUpload()->isDisabled());
+        $this->hidden(static fn (self $component): bool => $component->getUpload()->isHidden());
 
         return $this;
     }
@@ -122,18 +129,35 @@ class ImageMetaPanel extends Field
     }
 
     /**
-     * The details of one file, looked up by its item key first (an upload that has not been
-     * saved yet), then by its identifier.
+     * The slots that may hold the details of one file, most specific first: the identifier of a
+     * stored file, then the item key. A file uploaded and saved in the same Livewire session
+     * keeps its old `n<key>` slot (the save swaps the temporary file for its path under the
+     * same key), and every later edit is written to the identifier slot, so that one must win.
+     *
+     * @return array<int, string>
+     */
+    public static function slotsFor(string|int $key, mixed $file): array
+    {
+        $candidates = [];
+
+        if (is_string($file) && $file !== '') {
+            $candidates[] = self::slotForIdentifier($file);
+        }
+
+        $candidates[] = self::slotForKey($key);
+
+        return $candidates;
+    }
+
+    /**
+     * The details of one file, looked up by its identifier first (a stored file), then by its
+     * item key (an upload that has not been saved yet).
      *
      * @param array<string, mixed> $slots
      */
     public function lookup(array $slots, string|int $key, mixed $file): ImageMeta
     {
-        $candidates = [self::slotForKey($key)];
-
-        if (is_string($file) && $file !== '') {
-            $candidates[] = self::slotForIdentifier($file);
-        }
+        $candidates = self::slotsFor($key, $file);
 
         foreach ($candidates as $slot) {
             if (isset($slots[$slot]) && is_array($slots[$slot])) {
@@ -385,6 +409,7 @@ class ImageMetaPanel extends Field
     public function getEditDetailsAction(): Action
     {
         return Action::make(self::ACTION)
+            ->hidden(static fn (self $component): bool => $component->isDisabled() || $component->isHidden())
             ->label(__('image-meta::image-meta.edit_details'))
             ->icon(Heroicon::OutlinedPencilSquare)
             ->color('gray')
@@ -404,16 +429,17 @@ class ImageMetaPanel extends Field
                 $meta = $component->options->normalise($data);
                 $file = ($component->getUpload()->getRawState() ?? [])[$key] ?? null;
 
-                $slot = is_string($file) && $file !== ''
-                    ? self::slotForIdentifier($file)
-                    : self::slotForKey($key);
-
+                $candidates = self::slotsFor($key, $file);
                 $slots = $component->slots();
 
-                if ($meta->isEmpty()) {
-                    unset($slots[$slot]);
-                } else {
-                    $slots[$slot] = $meta->toArray();
+                // One slot per file: drop every candidate (a stale `n<key>` slot left by a save in
+                // this session included), then write the most specific one.
+                foreach ($candidates as $candidate) {
+                    unset($slots[$candidate]);
+                }
+
+                if (!$meta->isEmpty()) {
+                    $slots[$candidates[0]] = $meta->toArray();
                 }
 
                 $component->rawState($slots === [] ? [] : $slots);
@@ -524,7 +550,7 @@ class ImageMetaPanel extends Field
     protected function textFields(string $name, bool $disableWhenDecorative = false): array
     {
         $o = $this->options;
-        $max = $name === 'alt' ? (int) config('image-meta.alt_max_length', 250) : 255;
+        $max = $name === 'alt' ? ImageMetaOptions::altMaxLength() : ImageMetaOptions::TEXT_MAX_LENGTH;
         $fields = [];
 
         $targets = $o->isLocalised()

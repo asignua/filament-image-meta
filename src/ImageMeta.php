@@ -73,7 +73,8 @@ final readonly class ImageMeta
     /**
      * The details of the image stored in `$attribute` of the model.
      *
-     * - A column holding a path (or a list of paths) uploaded with `FileUpload::imageMeta()`:
+     * - A column holding a path (or a list of paths) uploaded with
+     *   `ImageMetaUpload::make(FileUpload::make('photo'), ...)`:
      *   read from the sibling `{$attribute}_meta` column; pass `$path` to pick one of many.
      * - A media-library collection name (when the model has no such column): the first media
      *   item of the collection, read from its custom properties.
@@ -255,6 +256,13 @@ final readonly class ImageMeta
         $fallback = config('image-meta.fallback_locale');
 
         $text = $texts[$locale] ?? $texts[self::ANY] ?? (is_string($fallback) ? ($texts[$fallback] ?? null) : null);
+
+        // Asking for the language-less text (a field without `locales:`) of an image that was
+        // described per language (by another site, or before `locales:` was removed): any text
+        // counts. The modal offers that same text, so the image is not "missing" its alt.
+        if ($text === null && $locale === self::ANY) {
+            $text = Arr::first($texts, static fn (string $value): bool => $value !== '');
+        }
 
         return ($text === null || $text === '') ? null : $text;
     }

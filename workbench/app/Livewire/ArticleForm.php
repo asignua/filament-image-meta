@@ -16,7 +16,7 @@ use LogicException;
 use Workbench\App\Models\Article;
 
 /**
- * A SpatieMediaLibraryFileUpload form. `$options` are the arguments of `imageMeta()`.
+ * A SpatieMediaLibraryFileUpload form. `$options` are the named arguments of `ImageMetaUpload::make()`.
  */
 class ArticleForm extends Component implements HasActions, HasSchemas
 {
@@ -33,13 +33,17 @@ class ArticleForm extends Component implements HasActions, HasSchemas
 
     public bool $multiple = false;
 
+    /** `disabled` or `hidden` locks the upload itself, as an app would for a user without rights. */
+    public ?string $uploadMode = null;
+
     /**
      * @param array<string, mixed> $options
      */
-    public function mount(?int $recordId = null, array $options = [], bool $multiple = false): void
+    public function mount(?int $recordId = null, array $options = [], bool $multiple = false, ?string $uploadMode = null): void
     {
         $this->options = $options;
         $this->multiple = $multiple;
+        $this->uploadMode = $uploadMode;
         $this->record = $recordId ? Article::query()->findOrFail($recordId) : null;
 
         $this->formSchema()->fill($this->record?->attributesToArray() ?? []);
@@ -51,7 +55,9 @@ class ArticleForm extends Component implements HasActions, HasSchemas
             ->collection('images')
             ->image()
             ->disk('public')
-            ->multiple($this->multiple);
+            ->multiple($this->multiple)
+            ->disabled(fn (): bool => $this->uploadMode === 'disabled')
+            ->hidden(fn (): bool => $this->uploadMode === 'hidden');
 
         return $schema
             ->components([ImageMetaUpload::make($upload, ...$this->options)])

@@ -161,4 +161,17 @@ class ImageMetaTest extends TestCase
         $this->assertSame('0% 100%', ImageMeta::fromArray(['focal' => ['x' => 0, 'y' => 100]])->objectPosition());
         $this->assertNull(ImageMeta::empty()->objectPosition());
     }
+
+    public function test_a_language_less_lookup_accepts_a_text_stored_per_language(): void
+    {
+        // Described per language elsewhere, read by a field without `locales:`.
+        $meta = ImageMeta::fromArray(['alt' => ['en' => 'Door']]);
+
+        $this->assertTrue($meta->hasAlt(ImageMeta::ANY));
+        $this->assertFalse($meta->isMissingAlt(ImageMeta::ANY));
+        $this->assertSame('Door', $meta->alt(ImageMeta::ANY));
+
+        // A real language still gets no text from another one.
+        $this->assertNull($meta->alt('uk'));
+    }
 }

@@ -30,12 +30,13 @@ class MediaLibraryUploadTest extends TestCase
     /**
      * @param array<string, mixed> $options
      */
-    private function form(array $options = [], ?Article $article = null, bool $multiple = false): Testable
+    private function form(array $options = [], ?Article $article = null, bool $multiple = false, ?string $uploadMode = null): Testable
     {
         return Livewire::test(ArticleForm::class, [
             'recordId' => $article?->getKey(),
             'options' => $options,
             'multiple' => $multiple,
+            'uploadMode' => $uploadMode,
         ]);
     }
 
@@ -196,5 +197,56 @@ class MediaLibraryUploadTest extends TestCase
             ->toMediaCollection('images', 'public');
 
         $this->assertSame('From media', ImageMeta::for($article->refresh(), 'images')->alt());
+    }
+
+    public function test_details_can_be_edited_again_after_a_save_in_the_same_session(): void
+    {
+        $form = $this->form();
+        $form->set('data.images', [UploadedFile::fake()->image('a.jpg')]);
+        $key = $this->firstKey($form);
+
+        $this->edit($form, $key, ['alt' => 'First'])->assertHasNoActionErrors();
+        $form->call('save')->assertHasNoErrors();
+
+        $media = Media::query()->sole();
+        $this->assertSame('First', $media->getCustomProperty('alt'));
+
+        // The same component, no reload: the slot of the new upload (`n<key>`) is still in the
+        // state, and the next edit goes to the media uuid's slot, which must win. (A second
+        // `save()` without refilling the form is not exercised: Filament's own
+        // `deleteAbandonedFiles()` then compares media uuids with the upload's item keys.)
+        $this->edit($form, $key, ['alt' => 'Second'])->assertHasNoActionErrors();
+
+        $form->mountAction(
+            TestAction::make(ImageMetaPanel::ACTION)->schemaComponent(self::COMPONENT, schema: 'form')->arguments(['key' => $key]),
+        )->assertActionDataSet(['alt' => 'Second']);
+        $form->unmountAction();
+
+        $this->assertCount(1, $form->get('data.'.self::COMPONENT));
+
+        $this->edit($form, $key, ['alt' => ''])->assertHasNoActionErrors();
+
+        $this->assertSame([], $form->get('data.'.self::COMPONENT));
+    }
+
+    public function test_a_disabled_upload_locks_its_details(): void
+    {
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $media = $article->addMedia(UploadedFile::fake()->image('seed.jpg'))
+            ->withCustomProperties(['alt' => 'Old alt'])
+            ->toMediaCollection('images', 'public');
+
+        $form = $this->form([], $article->refresh(), uploadMode: 'disabled');
+        $key = $this->firstKey($form);
+
+        $form->assertActionHidden(
+            TestAction::make(ImageMetaPanel::ACTION)->schemaComponent(self::COMPONENT, schema: 'form')->arguments(['key' => $key]),
+        );
+
+        $form->set('data.images_meta', [ImageMetaPanel::slotForIdentifier($key) => ['alt' => 'Forged']]);
+        $form->call('save');
+
+        $this->assertSame('Old alt', $media->refresh()->getCustomProperty('alt'));
     }
 }

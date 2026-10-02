@@ -118,6 +118,11 @@ not-yet-saved uploads too.
 `ImageMetaUpload::make()` returns a plain `Group` that contains the upload and the details panel **side by side**. Put the
 result in `components([...])`; configure the upload (`->image()`, `->disk()`, `->multiple()`...) *before* wrapping it.
 
+- **Layout is set on the returned `Group`**, which spans the full row by default: a `->columnSpan()` on the upload no
+  longer moves anything once it is wrapped. Use `ImageMetaUpload::make(...)->columnSpan(1)` instead.
+- **The panel follows the upload.** A `->disabled()` upload gets a read-only panel without the *Edit details* button,
+  and its details are not saved; a `->hidden()` upload hides the panel too.
+
 ## Storage
 
 ### Plain `FileUpload`
@@ -169,11 +174,12 @@ that is cleared is removed from the media item.
   redundant with an empty alt. Both are common mistakes.)
 - Not described → `alt=""` as well, and **never** the file name. With `image-meta.mark_missing_alt` on, the tag also carries
   `data-alt-missing`, so an audit (or `[data-alt-missing] { outline: 3px solid red }` in staging) finds it.
-- Focal point → `style="object-position: 31.5% 20%"`. Pair it with `object-fit: cover` (Tailwind `object-cover`); on its own
+- Focal point → `style="object-position: 31.5% 20%;"`, appended to a `style` you pass. Pair it with `object-fit: cover` (Tailwind `object-cover`); on its own
   it does nothing.
 - `title` → the `title` attribute (not for decorative images). `<x-image-meta::figure>` adds `<figcaption>`.
 
-`:meta` takes an `ImageMeta` or the stored array.
+`:meta` takes an `ImageMeta` or the stored array. Attributes you pass are merged, never duplicated: your own `alt` or
+`title` replaces the stored one, your `style` is kept.
 
 ## Reading the details
 

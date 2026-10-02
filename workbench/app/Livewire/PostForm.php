@@ -16,7 +16,7 @@ use LogicException;
 use Workbench\App\Models\Post;
 
 /**
- * A plain-FileUpload form. `$options` are the arguments of `imageMeta()`.
+ * A plain-FileUpload form. `$options` are the named arguments of `ImageMetaUpload::make()`.
  */
 class PostForm extends Component implements HasActions, HasSchemas
 {
@@ -33,13 +33,17 @@ class PostForm extends Component implements HasActions, HasSchemas
 
     public bool $multiple = false;
 
+    /** `disabled` or `hidden` locks the upload itself, as an app would for a user without rights. */
+    public ?string $uploadMode = null;
+
     /**
      * @param array<string, mixed> $options
      */
-    public function mount(?int $recordId = null, array $options = [], bool $multiple = false): void
+    public function mount(?int $recordId = null, array $options = [], bool $multiple = false, ?string $uploadMode = null): void
     {
         $this->options = $options;
         $this->multiple = $multiple;
+        $this->uploadMode = $uploadMode;
         $this->record = $recordId ? Post::query()->findOrFail($recordId) : null;
 
         $this->formSchema()->fill($this->record?->attributesToArray() ?? []);
@@ -60,7 +64,9 @@ class PostForm extends Component implements HasActions, HasSchemas
             ->image()
             ->disk('public')
             ->directory('posts')
-            ->multiple($this->multiple);
+            ->multiple($this->multiple)
+            ->disabled(fn (): bool => $this->uploadMode === 'disabled')
+            ->hidden(fn (): bool => $this->uploadMode === 'hidden');
 
         return $schema
             ->components([ImageMetaUpload::make($upload, ...$options)])

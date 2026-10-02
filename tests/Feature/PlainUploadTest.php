@@ -26,13 +26,24 @@ class PlainUploadTest extends TestCase
     /**
      * @param array<string, mixed> $options
      */
-    private function form(array $options = [], ?Post $post = null, bool $multiple = false): Testable
+    private function form(array $options = [], ?Post $post = null, bool $multiple = false, ?string $uploadMode = null): Testable
     {
         return Livewire::test(PostForm::class, [
             'recordId' => $post?->getKey(),
             'options' => $options,
             'multiple' => $multiple,
+            'uploadMode' => $uploadMode,
         ]);
+    }
+
+    private function storedPost(string $alt = 'Stored alt'): Post
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => ['alt' => $alt]]])->save();
+
+        return $post;
     }
 
     private function upload(Testable $form, string $name = 'a.jpg'): string
@@ -213,5 +224,84 @@ class PlainUploadTest extends TestCase
         $this->expectException(\Symfony\Component\HttpKernel\Exception\NotFoundHttpException::class);
 
         $this->edit($form, 'not-a-file', ['alt' => 'x']);
+    }
+
+    public function test_details_can_be_edited_again_after_a_save_in_the_same_session(): void
+    {
+        $form = $this->form(['locales' => ['en']]);
+        $key = $this->upload($form);
+
+        $this->edit($form, $key, ['alt' => ['en' => 'First']])->assertHasNoActionErrors();
+        $form->call('save')->assertHasNoErrors();
+
+        // The same component, no reload: the modal must show what was saved, and a new edit must win.
+        $form->mountAction(
+            TestAction::make(ImageMetaPanel::ACTION)->schemaComponent('photo_meta', schema: 'form')->arguments(['key' => $key]),
+        )->assertActionDataSet(['alt' => ['en' => 'First']]);
+        $form->unmountAction();
+
+        $this->edit($form, $key, ['alt' => ['en' => 'Second']])->assertHasNoActionErrors();
+        $form->call('save')->assertHasNoErrors();
+
+        $post = Post::query()->sole();
+
+        $this->assertSame([(string) $post->photo => ['alt' => ['en' => 'Second']]], $post->photo_meta);
+        $this->assertCount(1, $form->get('data.photo_meta'));
+
+        $this->edit($form, $key, ['alt' => ['en' => '']])->assertHasNoActionErrors();
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertNull($post->refresh()->photo_meta);
+    }
+
+    public function test_a_disabled_upload_locks_its_details(): void
+    {
+        $post = $this->storedPost();
+        $form = $this->form([], $post, uploadMode: 'disabled');
+        $key = (string) array_key_first($form->get('data.photo'));
+
+        $form->assertActionHidden(
+            TestAction::make(ImageMetaPanel::ACTION)->schemaComponent('photo_meta', schema: 'form')->arguments(['key' => $key]),
+        );
+
+        // A forged write to the panel's public state is not saved either.
+        $form->set('data.photo_meta', [ImageMetaPanel::slotForIdentifier('posts/seed.jpg') => ['alt' => 'Forged']]);
+        $form->call('save');
+
+        $this->assertSame(['posts/seed.jpg' => ['alt' => 'Stored alt']], $post->refresh()->photo_meta);
+    }
+
+    public function test_a_hidden_upload_hides_its_details(): void
+    {
+        $post = $this->storedPost('Secret alt');
+        $form = $this->form([], $post, uploadMode: 'hidden');
+
+        // Nothing of the panel is rendered; its action is not even resolvable (a hidden component).
+        $form->assertDontSee('Secret alt')->assertDontSee('seed.jpg');
+
+        $form->set('data.photo_meta', [ImageMetaPanel::slotForIdentifier('posts/seed.jpg') => ['alt' => 'Forged']]);
+        $form->call('save');
+
+        $this->assertSame(['posts/seed.jpg' => ['alt' => 'Secret alt']], $post->refresh()->photo_meta);
+    }
+
+    public function test_texts_written_straight_into_the_state_are_cut_to_the_limits(): void
+    {
+        config()->set('image-meta.alt_max_length', 10);
+
+        $form = $this->form(['caption' => true]);
+        $key = $this->upload($form);
+
+        $form->set('data.photo_meta', [ImageMetaPanel::slotForKey($key) => [
+            'alt' => str_repeat('a', 50),
+            'caption' => str_repeat('c', 1000),
+        ]]);
+        $form->call('save');
+
+        $post = Post::query()->sole();
+        $meta = $post->photo_meta[(string) $post->photo];
+
+        $this->assertSame(str_repeat('a', 10), $meta['alt']);
+        $this->assertSame(255, mb_strlen($meta['caption']));
     }
 }
