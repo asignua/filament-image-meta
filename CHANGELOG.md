@@ -13,4 +13,5 @@ All notable changes to `asignua/filament-image-meta` are documented here.
 - `<x-image-meta::img>` and `<x-image-meta::figure>`: decorative and undescribed images get `alt=""`, never the file name; `object-position` from the focal point; optional `data-alt-missing` marker.
 - Translations: English, Ukrainian, German, Spanish, French, Italian, Dutch, Polish, Brazilian Portuguese and Turkish.
 - Laravel Boost guidelines.
-- The details panel follows its upload: a disabled upload gives a read-only panel whose details are not saved, a hidden upload hides the panel. Texts written straight into the panel's state are cut to the configured lengths (`alt_max_length`, 255 for caption and title).
+- The details panel follows its upload: a disabled upload gives a read-only panel whose details are not saved, a hidden upload hides the panel. Texts written straight into the panel's state are cut to the configured lengths (`alt_max_length`, 255 for caption and title). Stored texts are not: a text longer than the limit that nobody edited is saved back unchanged, so lowering `alt_max_length` never shortens existing alt texts silently.
+- One set of details per file: removing a file drops its details, and a file uploaded again under the same path (`preserveFilenames()`, a deterministic file name) or the same media uuid does not inherit the removed file's details.

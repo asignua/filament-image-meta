@@ -220,7 +220,7 @@ By default only the **first** locale is required (an English-first site that tra
 | `meta_suffix` | `_meta` | Sibling attribute of a plain upload. |
 | `fallback_locale` | `null` | Language to fall back to when the requested alt is empty (`null` = never). |
 | `mark_missing_alt` | `false` | Add `data-alt-missing` to undescribed images. |
-| `alt_max_length` | `250` | Maximum alt text length in the modal. |
+| `alt_max_length` | `250` | Maximum alt text length in the modal; new texts are cut to it on save. Stored texts that are longer are kept as they are. |
 
 ## Gotchas
 

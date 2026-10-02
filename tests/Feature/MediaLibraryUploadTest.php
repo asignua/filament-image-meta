@@ -24,6 +24,8 @@ class MediaLibraryUploadTest extends TestCase
     {
         parent::setUp();
 
+        $this->requireMediaLibrary();
+
         Storage::fake('public');
     }
 
@@ -248,5 +250,47 @@ class MediaLibraryUploadTest extends TestCase
         $form->call('save');
 
         $this->assertSame('Old alt', $media->refresh()->getCustomProperty('alt'));
+    }
+
+    public function test_stored_texts_longer_than_the_limit_are_kept_on_save(): void
+    {
+        $long = str_repeat('a', 50);
+
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $media = $article->addMedia(UploadedFile::fake()->image('seed.jpg'))
+            ->withCustomProperties(['alt' => $long, 'caption' => 'Old caption'])
+            ->toMediaCollection('images', 'public');
+
+        config()->set('image-meta.alt_max_length', 10);
+
+        $form = $this->form(['caption' => true], $article->refresh());
+        $form->set('data.images_meta', [ImageMetaPanel::slotForIdentifier($media->uuid) => [
+            'alt' => $long,
+            'caption' => str_repeat('c', 1000),
+        ]]);
+        $form->call('save')->assertHasNoErrors();
+
+        $media->refresh();
+
+        // The stored alt is not cut; the caption written straight into the state is.
+        $this->assertSame($long, $media->getCustomProperty('alt'));
+        $this->assertSame(255, mb_strlen((string) $media->getCustomProperty('caption')));
+    }
+
+    public function test_a_removed_media_item_takes_its_slot_with_it(): void
+    {
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $media = $article->addMedia(UploadedFile::fake()->image('seed.jpg'))
+            ->withCustomProperties(['alt' => 'Old alt'])
+            ->toMediaCollection('images', 'public');
+
+        $form = $this->form([], $article->refresh());
+        $this->assertArrayHasKey(ImageMetaPanel::slotForIdentifier($media->uuid), $form->get('data.images_meta'));
+
+        $form->set('data.images', []);
+
+        $this->assertSame([], $form->get('data.images_meta'));
     }
 }

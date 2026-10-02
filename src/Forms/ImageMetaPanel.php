@@ -32,6 +32,12 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * that is only an upload so far and `f<sha1 of the identifier>` for a stored file (the path
  * of a plain upload, the uuid of a media item). The identifier-keyed form lives only in the
  * database: it is built on hydrate and torn down on dehydrate.
+ *
+ * ONE SLOT PER FILE. Whenever the upload's state changes (a file added, removed, or stored by
+ * `saveUploadedFiles()`), {@see syncSlots()} moves the `n<key>` slot of a stored file to its
+ * identifier slot (overwriting it) and drops the slots of files that are gone. Without it, a
+ * file removed and re-uploaded under the same path (`preserveFilenames()`, a deterministic
+ * file name) would find the removed file's details waiting under the same identifier.
  */
 class ImageMetaPanel extends Field
 {
@@ -161,7 +167,9 @@ class ImageMetaPanel extends Field
 
         foreach ($candidates as $slot) {
             if (isset($slots[$slot]) && is_array($slots[$slot])) {
-                return $this->options->normalise($slots[$slot]);
+                // Not cut to the length limits: this is also how stored details are read. The
+                // write paths cut what the browser may have written, see exportForColumn().
+                return $this->options->normalise($slots[$slot], limit: false);
             }
         }
 
@@ -218,7 +226,7 @@ class ImageMetaPanel extends Field
         }
 
         foreach (is_array($stored) ? $stored : [] as $path => $raw) {
-            $meta = $this->options->normalise(ImageMeta::fromArray($raw)->toArray());
+            $meta = $this->options->normalise(ImageMeta::fromArray($raw)->toArray(), limit: false);
 
             if (!$meta->isEmpty()) {
                 $slots[self::slotForIdentifier((string) $path)] = $meta->toArray();
@@ -239,7 +247,8 @@ class ImageMetaPanel extends Field
         // result independent of whether the upload dehydrates before or after the panel.
         $this->getUpload()->saveUploadedFiles();
 
-        $slots = $this->slots();
+        $slots = $this->syncSlots();
+        $stored = $this->storedInColumn();
         $out = [];
 
         foreach ($this->getUpload()->getRawState() ?? [] as $key => $file) {
@@ -247,7 +256,7 @@ class ImageMetaPanel extends Field
                 continue;
             }
 
-            $meta = $this->lookup($slots, $key, $file);
+            $meta = $this->options->limitTexts($this->lookup($slots, $key, $file), $stored[$file] ?? null);
 
             if (!$meta->isEmpty()) {
                 $out[$file] = $meta->toArray();
@@ -255,6 +264,61 @@ class ImageMetaPanel extends Field
         }
 
         return $out === [] ? null : $out;
+    }
+
+    /**
+     * The details as they are stored in the record's column now, keyed by file path.
+     *
+     * @return array<string, ImageMeta>
+     */
+    protected function storedInColumn(): array
+    {
+        $record = $this->getRecord();
+
+        return $record instanceof Model ? ImageMeta::allFor($record, $this->getName(), $this->getName()) : [];
+    }
+
+    /**
+     * Bring the slots in line with the upload's current files and write them back:
+     *
+     * - the `n<key>` slot of a file that is stored now moves to its identifier slot, replacing
+     *   whatever was there (those are the details typed for this upload);
+     * - slots of files that are no longer in the upload are dropped, so a later file stored
+     *   under the same path or uuid does not inherit them.
+     *
+     * Called after every change of the upload's state and before every write.
+     *
+     * @return array<string, mixed>
+     */
+    public function syncSlots(): array
+    {
+        $slots = $this->slots();
+        $synced = $slots;
+        $live = [];
+
+        foreach ($this->getUpload()->getRawState() ?? [] as $key => $file) {
+            $live[self::slotForKey($key)] = true;
+
+            if (!is_string($file) || $file === '') {
+                continue;
+            }
+
+            $identifier = self::slotForIdentifier($file);
+            $live[$identifier] = true;
+
+            if (array_key_exists(self::slotForKey($key), $synced)) {
+                $synced[$identifier] = $synced[self::slotForKey($key)];
+                unset($synced[self::slotForKey($key)]);
+            }
+        }
+
+        $synced = array_intersect_key($synced, $live);
+
+        if ($synced !== $slots) {
+            $this->rawState($synced);
+        }
+
+        return $synced;
     }
 
     /**
@@ -269,7 +333,7 @@ class ImageMetaPanel extends Field
             return;
         }
 
-        $slots = $this->slots();
+        $slots = $this->syncSlots();
         $names = ImageMeta::mediaProperties();
         $media = [];
 
@@ -284,7 +348,7 @@ class ImageMetaPanel extends Field
                 continue;
             }
 
-            $values = $this->lookup($slots, $key, $uuid)->toArray();
+            $values = $this->options->limitTexts($this->lookup($slots, $key, $uuid), ImageMeta::forMedia($item))->toArray();
 
             foreach ([
                 'alt' => 'alt',

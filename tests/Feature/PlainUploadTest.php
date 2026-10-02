@@ -304,4 +304,62 @@ class PlainUploadTest extends TestCase
         $this->assertSame(str_repeat('a', 10), $meta['alt']);
         $this->assertSame(255, mb_strlen($meta['caption']));
     }
+
+    public function test_a_file_re_uploaded_under_the_same_path_does_not_inherit_the_old_details(): void
+    {
+        $post = $this->storedPost('Old');
+        $form = $this->form([], $post, uploadMode: 'preserve');
+
+        $form->set('data.photo', []);
+        $key = $this->upload($form, 'seed.jpg');
+        $this->edit($form, $key, ['alt' => 'New'])->assertHasNoActionErrors();
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame('posts/seed.jpg', $post->refresh()->photo);
+        $this->assertSame(['posts/seed.jpg' => ['alt' => 'New']], $post->photo_meta);
+        $this->assertSame([ImageMetaPanel::slotForIdentifier('posts/seed.jpg') => ['alt' => 'New']], $form->get('data.photo_meta'));
+    }
+
+    public function test_a_file_re_uploaded_under_the_same_path_without_details_has_none(): void
+    {
+        $post = $this->storedPost('Old');
+        $form = $this->form([], $post, uploadMode: 'preserve');
+
+        $form->set('data.photo', []);
+        $this->upload($form, 'seed.jpg');
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame('posts/seed.jpg', $post->refresh()->photo);
+        $this->assertNull($post->photo_meta);
+    }
+
+    public function test_the_details_of_an_upload_win_over_a_slot_left_under_the_same_path(): void
+    {
+        $post = $this->storedPost('Old');
+        $form = $this->form([], $post);
+
+        // The upload's state already holds the stored path under a new item key (as after a
+        // save with a deterministic file name); the details typed for that item must win.
+        $form->set('data.photo_meta', [
+            ImageMetaPanel::slotForIdentifier('posts/seed.jpg') => ['alt' => 'Old'],
+            ImageMetaPanel::slotForKey('k2') => ['alt' => 'New'],
+        ]);
+        $form->set('data.photo', ['k2' => 'posts/seed.jpg']);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['posts/seed.jpg' => ['alt' => 'New']], $post->refresh()->photo_meta);
+    }
+
+    public function test_stored_texts_longer_than_the_limit_are_kept_on_save(): void
+    {
+        $long = str_repeat('a', 50);
+        $post = $this->storedPost($long);
+
+        config()->set('image-meta.alt_max_length', 10);
+
+        $form = $this->form([], $post);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['posts/seed.jpg' => ['alt' => $long]], $post->refresh()->photo_meta);
+    }
 }

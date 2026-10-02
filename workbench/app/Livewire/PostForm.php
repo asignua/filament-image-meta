@@ -33,7 +33,10 @@ class PostForm extends Component implements HasActions, HasSchemas
 
     public bool $multiple = false;
 
-    /** `disabled` or `hidden` locks the upload itself, as an app would for a user without rights. */
+    /**
+     * `disabled` or `hidden` locks the upload itself, as an app would for a user without rights;
+     * `preserve` keeps the original file names (a re-uploaded file lands on the same path).
+     */
     public ?string $uploadMode = null;
 
     /**
@@ -65,6 +68,7 @@ class PostForm extends Component implements HasActions, HasSchemas
             ->disk('public')
             ->directory('posts')
             ->multiple($this->multiple)
+            ->preserveFilenames($this->uploadMode === 'preserve')
             ->disabled(fn (): bool => $this->uploadMode === 'disabled')
             ->hidden(fn (): bool => $this->uploadMode === 'hidden');
 

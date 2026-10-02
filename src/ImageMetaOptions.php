@@ -48,11 +48,16 @@ final readonly class ImageMetaOptions
     }
 
     /**
-     * Cut a submitted modal payload down to what this field collects and normalise it.
+     * Cut a payload down to what this field collects and normalise it.
+     *
+     * `$limit` cuts the texts to the configured lengths. It is meant for writes that come from
+     * the browser; values read from storage are passed with `$limit: false`, so that lowering
+     * `alt_max_length` (or reading texts written by another tool) does not silently shorten
+     * them. See {@see limitTexts()} for the write path that keeps the stored texts.
      *
      * @param array<string, mixed> $data
      */
-    public function normalise(array $data): ImageMeta
+    public function normalise(array $data, bool $limit = true): ImageMeta
     {
         $allowed = [
             'alt' => $this->alt ? ($data['alt'] ?? null) : null,
@@ -64,15 +69,30 @@ final readonly class ImageMetaOptions
 
         $meta = ImageMeta::fromArray($allowed);
 
-        // The panel's state is a public Livewire property: the modal's `maxLength` is only a hint
-        // to an honest browser, so the limits are enforced again here, on every write.
-        $altMax = self::altMaxLength();
-
-        return new ImageMeta(
-            alt: $this->limit($this->onlyLocales($meta->alt), $altMax),
+        $meta = new ImageMeta(
+            alt: $this->onlyLocales($meta->alt),
             decorative: $meta->decorative,
-            caption: $this->limit($this->onlyLocales($meta->caption), self::TEXT_MAX_LENGTH),
-            title: $this->limit($this->onlyLocales($meta->title), self::TEXT_MAX_LENGTH),
+            caption: $this->onlyLocales($meta->caption),
+            title: $this->onlyLocales($meta->title),
+            focal: $meta->focal,
+        );
+
+        return $limit ? $this->limitTexts($meta) : $meta;
+    }
+
+    /**
+     * Cut the texts to the configured lengths. The panel's state is a public Livewire property:
+     * the modal's `maxLength` is only a hint to an honest browser, so the limits are enforced
+     * again on every write. A text equal to the one in `$stored` (the same language) is kept
+     * as it is: it was not written by the browser, and cutting it would lose it silently.
+     */
+    public function limitTexts(ImageMeta $meta, ?ImageMeta $stored = null): ImageMeta
+    {
+        return new ImageMeta(
+            alt: $this->limit($meta->alt, self::altMaxLength(), $stored->alt ?? []),
+            decorative: $meta->decorative,
+            caption: $this->limit($meta->caption, self::TEXT_MAX_LENGTH, $stored->caption ?? []),
+            title: $this->limit($meta->title, self::TEXT_MAX_LENGTH, $stored->title ?? []),
             focal: $meta->focal,
         );
     }
@@ -87,12 +107,19 @@ final readonly class ImageMetaOptions
 
     /**
      * @param array<string, string> $texts
+     * @param array<string, string> $keep  texts that are kept even when they are longer
      *
      * @return array<string, string>
      */
-    private function limit(array $texts, int $max): array
+    private function limit(array $texts, int $max, array $keep = []): array
     {
-        return array_map(static fn (string $text): string => rtrim(mb_substr($text, 0, $max)), $texts);
+        foreach ($texts as $locale => $text) {
+            if (($keep[$locale] ?? null) !== $text) {
+                $texts[$locale] = rtrim(mb_substr($text, 0, $max));
+            }
+        }
+
+        return $texts;
     }
 
     /**

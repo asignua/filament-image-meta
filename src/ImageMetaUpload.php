@@ -65,6 +65,12 @@ final class ImageMetaUpload
         $panel = ImageMetaPanel::make($statePath ?? ($upload->getName().(string) config('image-meta.meta_suffix', '_meta')))
             ->configureFor($options, $storesInMedia);
 
+        // Keep one slot per file: see ImageMetaPanel::syncSlots(). Appended to the upload's own
+        // callbacks; `saveUploadedFiles()` and removing a file both call them.
+        $upload->afterStateUpdated(static function (BaseFileUpload $component): void {
+            ImageMetaPanel::siblingOf($component)?->syncSlots();
+        });
+
         if ($storesInMedia) {
             $original = (fn (): ?Closure => $this->saveRelationshipsUsing)->call($upload);
 
