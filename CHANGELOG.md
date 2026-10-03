@@ -2,7 +2,7 @@
 
 All notable changes to `asignua/filament-image-meta` are documented here.
 
-## v1.0.0 - unreleased
+## v1.0.0 - 2026-10-03
 
 - `ImageMetaUpload::make($upload, ...)` adds per-file details to a core `FileUpload` or `SpatieMediaLibraryFileUpload`: alt text (optionally per locale), a "decorative image" flag, caption, title and a focal point.
 - An "Edit details" action per uploaded image (modal) with a status badge per row: alt set, decorative, alt missing, focal point set.
