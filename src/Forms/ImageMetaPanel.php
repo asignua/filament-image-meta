@@ -350,13 +350,7 @@ class ImageMetaPanel extends Field
 
             $values = $this->options->limitTexts($this->lookup($slots, $key, $uuid), ImageMeta::forMedia($item))->toArray();
 
-            foreach ([
-                'alt' => 'alt',
-                'decorative' => 'decorative',
-                'caption' => 'caption',
-                'title' => 'title',
-                'focal' => 'focal_point',
-            ] as $metaKey => $propertyKey) {
+            foreach ($this->managedMediaProperties() as $metaKey => $propertyKey) {
                 if (array_key_exists($metaKey, $values)) {
                     $item->setCustomProperty($names[$propertyKey], $values[$metaKey]);
                 } else {
@@ -368,6 +362,28 @@ class ImageMetaPanel extends Field
                 $item->save();
             }
         }
+    }
+
+    /**
+     * The details this field collects, as `ImageMeta` key => `mediaProperties()` key. Only these
+     * are written or removed on a media item: a detail the field does not collect (`title: false`,
+     * no focal point, ...) may be kept there by another field or another tool, and the empty value
+     * that {@see ImageMetaOptions::normalise()} gives it must not erase it. The decorative switch is
+     * offered only together with the alt text.
+     *
+     * @return array<string, string>
+     */
+    protected function managedMediaProperties(): array
+    {
+        $o = $this->options;
+
+        return array_filter([
+            'alt' => $o->alt ? 'alt' : null,
+            'decorative' => $o->alt && $o->decorative ? 'decorative' : null,
+            'caption' => $o->caption ? 'caption' : null,
+            'title' => $o->title ? 'title' : null,
+            'focal' => $o->focalPoint ? 'focal_point' : null,
+        ]);
     }
 
     /**

@@ -158,8 +158,9 @@ details with them on save.
 Nothing to add to the model. After the upload has saved its files, the details are written to the **`custom_properties`**
 of each media item. The property names are configurable (see [Configuration](#configuration)); the defaults are
 `alt`, `alt_decorative`, `caption`, `title` and `focal_point`, so a site that already keeps `alt` / `alt_decorative` /
-`caption` there needs no data migration. Properties the plugin does not manage (`credit`, ...) are left alone; a detail
-that is cleared is removed from the media item.
+`caption` there needs no data migration. Properties the plugin does not manage (`credit`, ...) are left alone, and so are
+the details a field does not collect (a field without `title:` never touches `title`); a detail that is cleared is removed
+from the media item.
 
 ## Rendering
 

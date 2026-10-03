@@ -166,6 +166,52 @@ class MediaLibraryUploadTest extends TestCase
         $this->assertSame('Photographer', $media->refresh()->getCustomProperty('credit'));
     }
 
+    public function test_details_the_field_does_not_collect_are_left_alone(): void
+    {
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $media = $article->addMedia(UploadedFile::fake()->image('seed.jpg'))
+            ->withCustomProperties([
+                'alt' => 'Old',
+                'caption' => 'Written elsewhere',
+                'title' => 'Also elsewhere',
+                'focal_point' => ['x' => 10, 'y' => 20],
+            ])
+            ->toMediaCollection('images', 'public');
+
+        // Only alt + decorative are collected here: caption, title and the focal point belong
+        // to another editor (or another field) and must survive this save.
+        $form = $this->form([], $article->refresh());
+        $this->edit($form, $this->firstKey($form), ['alt' => 'New']);
+        $form->call('save')->assertHasNoErrors();
+
+        $media->refresh();
+
+        $this->assertSame('New', $media->getCustomProperty('alt'));
+        $this->assertSame('Written elsewhere', $media->getCustomProperty('caption'));
+        $this->assertSame('Also elsewhere', $media->getCustomProperty('title'));
+        $this->assertEquals(['x' => 10, 'y' => 20], $media->getCustomProperty('focal_point'));
+    }
+
+    public function test_a_field_without_alt_leaves_alt_and_decorative_alone(): void
+    {
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $media = $article->addMedia(UploadedFile::fake()->image('seed.jpg'))
+            ->withCustomProperties(['alt' => 'Kept', 'alt_decorative' => true])
+            ->toMediaCollection('images', 'public');
+
+        $form = $this->form(['alt' => false, 'focalPoint' => true], $article->refresh());
+        $this->edit($form, $this->firstKey($form), ['focal' => ['x' => 40, 'y' => 60]]);
+        $form->call('save')->assertHasNoErrors();
+
+        $media->refresh();
+
+        $this->assertSame('Kept', $media->getCustomProperty('alt'));
+        $this->assertTrue($media->getCustomProperty('alt_decorative'));
+        $this->assertEquals(['x' => 40, 'y' => 60], $media->getCustomProperty('focal_point'));
+    }
+
     public function test_every_file_of_a_gallery_gets_its_own_details(): void
     {
         $form = $this->form(multiple: true);
