@@ -526,6 +526,13 @@ class ImageMetaPanel extends Field
 
                 $candidates = self::slotsFor($key, $file);
                 $slots = $component->slots();
+                // On the column path a stored file keeps its identifier slot even when every detail
+                // is cleared: the slot marks it as stored, and without it exportForColumn() would
+                // drop what the field does not manage (texts in other languages, details it does
+                // not collect). The media path reads those from the media item and needs no marker.
+                $stored = !$component->storesInMedia
+                    && $candidates[0] !== self::slotForKey($key)
+                    && array_key_exists($candidates[0], $slots);
 
                 // One slot per file: drop every candidate (a stale `n<key>` slot left by a save in
                 // this session included), then write the most specific one.
@@ -535,6 +542,8 @@ class ImageMetaPanel extends Field
 
                 if (!$meta->isEmpty()) {
                     $slots[$candidates[0]] = $meta->toArray();
+                } elseif ($stored) {
+                    $slots[$candidates[0]] = [];
                 }
 
                 $component->rawState($slots === [] ? [] : $slots);

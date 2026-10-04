@@ -221,6 +221,39 @@ class PlainUploadTest extends TestCase
         ], $post->refresh()->gallery_meta);
     }
 
+    public function test_clearing_every_collected_detail_keeps_what_the_field_does_not_manage(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => [
+            'alt' => ['uk' => 'x', 'pl' => 'P'],
+            'caption' => 'y',
+        ]]])->save();
+
+        $form = $this->form(['locales' => ['en', 'uk'], 'caption' => false], $post);
+        $key = (string) array_key_first($form->get('data.photo'));
+        $this->edit($form, $key, ['alt' => ['en' => '', 'uk' => '']]);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['alt' => ['pl' => 'P'], 'caption' => 'y'], $post->refresh()->photo_meta['posts/seed.jpg']);
+
+        // The cleared file can be opened and edited again in the same session.
+        $this->edit($form, $key, ['alt' => ['en' => 'Again', 'uk' => '']]);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['alt' => ['en' => 'Again', 'pl' => 'P'], 'caption' => 'y'], $post->refresh()->photo_meta['posts/seed.jpg']);
+    }
+
+    public function test_clearing_a_new_upload_leaves_no_slot_behind(): void
+    {
+        $form = $this->form(['alt' => true]);
+        $key = $this->upload($form);
+        $this->edit($form, $key, ['alt' => 'typed']);
+        $this->edit($form, $key, ['alt' => '']);
+
+        $this->assertSame([], $form->get('data.photo_meta'));
+    }
+
     public function test_marking_an_image_decorative_drops_the_alt_texts_in_every_language(): void
     {
         Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
