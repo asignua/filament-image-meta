@@ -2,6 +2,11 @@
 
 All notable changes to `asignua/filament-image-meta` are documented here.
 
+## Unreleased
+
+- A save keeps the alt, caption and title texts in languages outside the field's `locales` (an earlier language list, texts written by another tool), on both storages; before, every save rewrote each file's texts with the configured languages only.
+- A plain `FileUpload` keeps the details it does not collect (`caption`, `title`, the focal point) in its `{name}_meta` entry, as the media-library path already did; a new file stored under the path of a removed one still inherits nothing.
+
 ## v1.0.0 - 2026-10-03
 
 - `ImageMetaUpload::make($upload, ...)` adds per-file details to a core `FileUpload` or `SpatieMediaLibraryFileUpload`: alt text (optionally per locale), a "decorative image" flag, caption, title and a focal point.

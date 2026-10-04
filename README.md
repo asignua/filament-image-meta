@@ -151,7 +151,12 @@ protected function casts(): array
 ```
 
 A language-less field (`locales: []`) stores plain strings (`"alt": "A red door"`). Files that are removed take their
-details with them on save.
+details with them on save; a new file stored under the path of a removed one starts with no details.
+
+A save rewrites only what the field manages, for every kept file whether its modal was opened or not: the details it
+does not collect (a field without `caption:` keeps the stored `caption`, title and focal point the same way) and the
+texts in languages outside its `locales` (an earlier language list, another site or tool) are kept from the stored entry.
+Marking an image decorative removes its alt text in every language.
 
 ### `SpatieMediaLibraryFileUpload`
 
@@ -159,8 +164,9 @@ Nothing to add to the model. After the upload has saved its files, the details a
 of each media item. The property names are configurable (see [Configuration](#configuration)); the defaults are
 `alt`, `alt_decorative`, `caption`, `title` and `focal_point`, so a site that already keeps `alt` / `alt_decorative` /
 `caption` there needs no data migration. Properties the plugin does not manage (`credit`, ...) are left alone, and so are
-the details a field does not collect (a field without `title:` never touches `title`); a detail that is cleared is removed
-from the media item.
+the details a field does not collect (a field without `title:` never touches `title`), and the texts in languages outside
+the field's `locales` (`alt.pl` survives a field with `locales: ['en', 'uk']`); a detail that is cleared is removed from
+the media item.
 
 ## Rendering
 

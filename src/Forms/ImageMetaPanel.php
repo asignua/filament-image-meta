@@ -226,7 +226,9 @@ class ImageMetaPanel extends Field
         }
 
         foreach (is_array($stored) ? $stored : [] as $path => $raw) {
-            $meta = $this->options->normalise(ImageMeta::fromArray($raw)->toArray(), limit: false);
+            // Not normalised: a file whose entry holds only details this field does not collect still
+            // gets its slot, which marks it as stored (see exportForColumn()). Reads normalise it.
+            $meta = ImageMeta::fromArray($raw);
 
             if (!$meta->isEmpty()) {
                 $slots[self::slotForIdentifier((string) $path)] = $meta->toArray();
@@ -237,12 +239,20 @@ class ImageMetaPanel extends Field
     }
 
     /**
-     * Slots -> the column (`path => details`) for the files that are really kept.
+     * Slots -> the column (`path => details`) for the files that are really kept. What this field
+     * does not manage (details it does not collect, texts in other languages) is kept from the
+     * stored entry, see {@see ImageMetaOptions::keepUnmanaged()}.
      *
      * @return array<string, array<string, mixed>>|null
      */
     protected function exportForColumn(): ?array
     {
+        // Only a file that still has its identifier slot keeps what the field does not manage. A
+        // stored file gets that slot on hydration and loses it when it is removed, so a new upload
+        // stored under the old path (an upload's own details sit in its `n<key>` slot until the
+        // sync below) is another image and inherits nothing.
+        $before = $this->slots();
+
         // Idempotent: a file that is already stored passes through. Doing it here makes the
         // result independent of whether the upload dehydrates before or after the panel.
         $this->getUpload()->saveUploadedFiles();
@@ -256,7 +266,11 @@ class ImageMetaPanel extends Field
                 continue;
             }
 
-            $meta = $this->options->limitTexts($this->lookup($slots, $key, $file), $stored[$file] ?? null);
+            $previous = array_key_exists(self::slotForIdentifier($file), $before) ? ($stored[$file] ?? null) : null;
+            $meta = $this->options->keepUnmanaged(
+                $this->options->limitTexts($this->lookup($slots, $key, $file), $stored[$file] ?? null),
+                $previous,
+            );
 
             if (!$meta->isEmpty()) {
                 $out[$file] = $meta->toArray();
@@ -348,7 +362,8 @@ class ImageMetaPanel extends Field
                 continue;
             }
 
-            $values = $this->options->limitTexts($this->lookup($slots, $key, $uuid), ImageMeta::forMedia($item))->toArray();
+            $stored = ImageMeta::forMedia($item);
+            $values = $this->options->keepUnmanaged($this->options->limitTexts($this->lookup($slots, $key, $uuid), $stored), $stored)->toArray();
 
             foreach ($this->managedMediaProperties() as $metaKey => $propertyKey) {
                 if (array_key_exists($metaKey, $values)) {

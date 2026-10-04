@@ -193,6 +193,26 @@ class MediaLibraryUploadTest extends TestCase
         $this->assertEquals(['x' => 10, 'y' => 20], $media->getCustomProperty('focal_point'));
     }
 
+    public function test_texts_in_languages_the_field_does_not_collect_are_left_alone(): void
+    {
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $opened = $article->addMedia(UploadedFile::fake()->image('a.jpg'))
+            ->withCustomProperties(['alt' => ['en' => 'E', 'uk' => 'У', 'pl' => 'P'], 'caption' => ['en' => 'C', 'pl' => 'CP']])
+            ->toMediaCollection('images', 'public');
+        $untouched = $article->addMedia(UploadedFile::fake()->image('b.jpg'))
+            ->withCustomProperties(['alt' => ['en' => 'E2', 'pl' => 'P2']])
+            ->toMediaCollection('images', 'public');
+
+        $form = $this->form(['locales' => ['en', 'uk'], 'caption' => true], $article->refresh(), multiple: true);
+        $this->edit($form, $this->firstKey($form), ['alt' => ['en' => 'New', 'uk' => ''], 'caption' => ['en' => '', 'uk' => 'К']]);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['en' => 'New', 'pl' => 'P'], $opened->refresh()->getCustomProperty('alt'));
+        $this->assertSame(['uk' => 'К', 'pl' => 'CP'], $opened->getCustomProperty('caption'));
+        $this->assertSame(['en' => 'E2', 'pl' => 'P2'], $untouched->refresh()->getCustomProperty('alt'));
+    }
+
     public function test_a_field_without_alt_leaves_alt_and_decorative_alone(): void
     {
         $article = new Article;

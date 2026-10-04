@@ -167,6 +167,73 @@ class PlainUploadTest extends TestCase
         );
     }
 
+    public function test_details_the_field_does_not_collect_are_left_alone(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => [
+            'alt' => 'Old',
+            'caption' => 'Written elsewhere',
+            'title' => 'Also elsewhere',
+            'focal' => ['x' => 10, 'y' => 20],
+        ]]])->save();
+
+        $form = $this->form(['alt' => true, 'caption' => false], $post);
+        $this->edit($form, (string) array_key_first($form->get('data.photo')), ['alt' => 'New']);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertEquals(
+            ['alt' => 'New', 'caption' => 'Written elsewhere', 'title' => 'Also elsewhere', 'focal' => ['x' => 10, 'y' => 20]],
+            $post->refresh()->photo_meta['posts/seed.jpg'],
+        );
+    }
+
+    public function test_an_entry_with_only_details_the_field_does_not_collect_survives_a_save(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => ['caption' => 'y', 'alt' => ['pl' => 'P']]]])->save();
+
+        $this->form(['locales' => ['en', 'uk']], $post)->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['alt' => ['pl' => 'P'], 'caption' => 'y'], $post->refresh()->photo_meta['posts/seed.jpg']);
+    }
+
+    public function test_texts_in_languages_the_field_does_not_collect_are_left_alone(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        Storage::disk('public')->put('posts/other.jpg', (string) UploadedFile::fake()->image('other.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['gallery' => ['posts/seed.jpg', 'posts/other.jpg'], 'gallery_meta' => [
+            'posts/seed.jpg' => ['alt' => ['en' => 'E', 'uk' => 'У', 'pl' => 'P']],
+            'posts/other.jpg' => ['alt' => ['en' => 'E2', 'pl' => 'P2']],
+        ]])->save();
+
+        $form = $this->form(['locales' => ['en', 'uk']], $post, multiple: true);
+        $keys = array_keys($form->get('data.gallery'));
+        // Only the first file is opened; the second one is saved untouched.
+        $this->edit($form, (string) $keys[0], ['alt' => ['en' => 'New', 'uk' => '']], 'gallery_meta');
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame([
+            'posts/seed.jpg' => ['alt' => ['en' => 'New', 'pl' => 'P']],
+            'posts/other.jpg' => ['alt' => ['en' => 'E2', 'pl' => 'P2']],
+        ], $post->refresh()->gallery_meta);
+    }
+
+    public function test_marking_an_image_decorative_drops_the_alt_texts_in_every_language(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => ['alt' => ['en' => 'E', 'pl' => 'P']]]])->save();
+
+        $form = $this->form(['locales' => ['en', 'uk']], $post);
+        $this->edit($form, (string) array_key_first($form->get('data.photo')), ['decorative' => true]);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['decorative' => true], $post->refresh()->photo_meta['posts/seed.jpg']);
+    }
+
     public function test_the_modal_is_prefilled_with_the_stored_details(): void
     {
         $form = $this->form(['locales' => ['en', 'uk']]);
@@ -324,6 +391,21 @@ class PlainUploadTest extends TestCase
     {
         $post = $this->storedPost('Old');
         $form = $this->form([], $post, uploadMode: 'preserve');
+
+        $form->set('data.photo', []);
+        $this->upload($form, 'seed.jpg');
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame('posts/seed.jpg', $post->refresh()->photo);
+        $this->assertNull($post->photo_meta);
+    }
+
+    public function test_a_file_re_uploaded_under_the_same_path_does_not_inherit_details_the_field_does_not_manage(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => ['alt' => ['en' => 'Old', 'pl' => 'Stare'], 'caption' => 'Old caption']]])->save();
+        $form = $this->form(['locales' => ['en', 'uk']], $post, uploadMode: 'preserve');
 
         $form->set('data.photo', []);
         $this->upload($form, 'seed.jpg');

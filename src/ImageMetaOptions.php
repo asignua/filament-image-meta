@@ -106,6 +106,47 @@ final readonly class ImageMetaOptions
     }
 
     /**
+     * Put back into `$meta` what this field does not manage, taken from `$stored` (the details as
+     * they are stored now): every detail the field does not collect, and the texts in languages
+     * outside `locales` (an earlier language list, another site or tool). The details this field
+     * collects, in its own languages, are taken from `$meta` as they are. A decorative image keeps
+     * no alt text in any language.
+     */
+    public function keepUnmanaged(ImageMeta $meta, ?ImageMeta $stored): ImageMeta
+    {
+        if ($stored === null) {
+            return $meta;
+        }
+
+        $decorative = $this->alt && $this->decorative ? $meta->decorative : $stored->decorative;
+
+        return new ImageMeta(
+            alt: $this->alt ? ($meta->decorative ? [] : $this->withOtherLocales($meta->alt, $stored->alt)) : $stored->alt,
+            decorative: $decorative,
+            caption: $this->caption ? $this->withOtherLocales($meta->caption, $stored->caption) : $stored->caption,
+            title: $this->title ? $this->withOtherLocales($meta->title, $stored->title) : $stored->title,
+            focal: $this->focalPoint ? $meta->focal : $stored->focal,
+        );
+    }
+
+    /**
+     * @param array<string, string> $texts
+     * @param array<string, string> $stored
+     *
+     * @return array<string, string>
+     */
+    private function withOtherLocales(array $texts, array $stored): array
+    {
+        if (!$this->isLocalised()) {
+            return $texts;
+        }
+
+        // The language-less text is not "another language": the modal offers it to the first
+        // language, and a submitted modal drops it.
+        return $texts + array_diff_key($stored, array_flip([...$this->locales, ImageMeta::ANY]));
+    }
+
+    /**
      * @param array<string, string> $texts
      * @param array<string, string> $keep  texts that are kept even when they are longer
      *
