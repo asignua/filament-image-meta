@@ -1,6 +1,6 @@
 {
     "name": "asignua/filament-image-meta",
-    "description": "Per-file alt text (per locale), a decorative flag, caption, title and focal point for Filament 5 FileUpload and SpatieMediaLibraryFileUpload, plus an accessible Blade <img> that renders them correctly.",
+    "description": "Per-file alt text (per locale), a decorative flag, caption, title and focal point for Filament 5's own FileUpload and SpatieMediaLibraryFileUpload — one wrapper around the upload you already have, no media library to adopt. A missing alt is reported (form badge, optional validation, data attribute) and never replaced by the file name; an accessible Blade <img> component renders alt, caption and the focal point as object-position.",
     "keywords": ["filament", "filament-plugin", "laravel", "file-upload", "alt-text", "accessibility", "a11y", "seo", "focal-point", "media-library"],
     "homepage": "https://github.com/asignua/filament-image-meta",
     "support": {
