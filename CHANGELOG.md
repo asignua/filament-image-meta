@@ -2,7 +2,7 @@
 
 All notable changes to `asignua/filament-image-meta` are documented here.
 
-## Unreleased
+## v1.0.2 - 2026-10-08
 
 - Dependencies: esbuild 0.28 (dev); the built asset is unchanged.
 - A field outside a Repeater or Builder item (however many Sections or wrappers it sits in) compares a save with the record's stored column, not with the state the browser holds, so the text length limit cannot be lifted nor foreign texts injected by writing the reserved `_stored` key; the `requireAlt` rule also recognises stored images with other extensions (`heic`, `tif`, …) and, with no extension, asks the upload's mime type.
