@@ -26,6 +26,7 @@ return new class extends Migration
             $table->json('photo_meta')->nullable();
             $table->json('gallery')->nullable();
             $table->json('gallery_meta')->nullable();
+            $table->json('blocks')->nullable();
             $table->timestamps();
         });
 

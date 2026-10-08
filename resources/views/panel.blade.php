@@ -1,8 +1,10 @@
 @php
     $rows = $getRows();
     $editAction = $getAction(\Asignua\FilamentImageMeta\Forms\ImageMetaPanel::ACTION);
+    $previewLocale = $field->previewLocale();
 @endphp
 
+<x-dynamic-component :component="$getFieldWrapperView()" :field="$field">
 @if (count($rows) > 0)
     <ul
         class="fi-image-meta-panel"
@@ -31,12 +33,12 @@
                         {{ $row['name'] }}
                     </span>
 
-                    @if ($row['meta']->alt() !== null)
+                    @if ($row['meta']->ownAlt($previewLocale) !== null)
                         <span
                             class="fi-fo-field-wrp-hint"
                             style="display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
                         >
-                            {{ $row['meta']->alt() }}
+                            {{ $row['meta']->ownAlt($previewLocale) }}
                         </span>
                     @endif
                 </span>
@@ -61,3 +63,4 @@
         @endforeach
     </ul>
 @endif
+</x-dynamic-component>

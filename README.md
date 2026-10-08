@@ -212,8 +212,8 @@ reported as missing rather than showing the English sentence to a screen reader 
 
 ## Validation
 
-`requireAlt: true` adds a rule to the upload: every image must have alt text in the required locales **or** be marked
-decorative; the error names the file. `requireAlt` also takes a closure, e.g. `fn () => auth()->user()->isEditor()`.
+`requireAlt: true` adds a rule to the details panel (so it also covers images that are already stored): every image must have alt text in the required locales **or** be marked
+decorative; the error names the file and is shown under the file list. `fallback_locale` does not count: a required language needs its own text. `requireAlt` also takes a closure, e.g. `fn () => auth()->user()->isEditor()`.
 By default only the **first** locale is required (an English-first site that translates later); list more with
 `requiredLocales: ['en', 'uk']`.
 

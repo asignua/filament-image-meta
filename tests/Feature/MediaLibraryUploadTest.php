@@ -359,4 +359,19 @@ class MediaLibraryUploadTest extends TestCase
 
         $this->assertSame([], $form->get('data.images_meta'));
     }
+
+    public function test_applying_the_modal_of_a_language_less_field_keeps_texts_written_per_language(): void
+    {
+        $article = new Article;
+        $article->forceFill(['title' => 'x'])->save();
+        $media = $article->addMedia(UploadedFile::fake()->image('a.jpg'))
+            ->withCustomProperties(['alt' => ['en' => 'A red door', 'uk' => 'Двері']])
+            ->toMediaCollection('images', 'public');
+
+        $form = $this->form(['focalPoint' => true], $article->refresh());
+        $this->edit($form, $this->firstKey($form), ['alt' => 'A red door', 'focal' => ['x' => 10, 'y' => 20]]);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame(['en' => 'A red door', 'uk' => 'Двері'], $media->refresh()->getCustomProperty('alt'));
+    }
 }

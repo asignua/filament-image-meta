@@ -8,7 +8,10 @@ use Asignua\FilamentImageMeta\ImageMeta;
 use Asignua\FilamentImageMeta\ImageMetaOptions;
 use Filament\Actions\Action;
 use Filament\Forms\Components\BaseFileUpload;
+use Filament\Forms\Components\Builder;
+use Filament\Forms\Components\Builder\Block;
 use Filament\Forms\Components\Field;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Schemas\Components\Component;
@@ -43,11 +46,22 @@ class ImageMetaPanel extends Field
 {
     public const string ACTION = 'editDetails';
 
+    /**
+     * The reserved key of the state that holds the details exactly as they were stored when the
+     * form was filled (`identifier slot => details`). It is the snapshot that a save compares
+     * against, taken from the state and not from the record: an upload inside a Repeater or a
+     * Builder item has no column on the record, its details live in the item's own JSON.
+     */
+    public const string STORED = '_stored';
+
     protected string $view = 'image-meta::panel';
 
     protected ImageMetaOptions $options;
 
     protected bool $storesInMedia = false;
+
+    /** @var array{0: string, 1: array<int|string, mixed>}|null the upload's files for the current state, see uploadedFiles() */
+    protected ?array $uploadedFilesCache = null;
 
     protected function setUp(): void
     {
@@ -225,6 +239,8 @@ class ImageMetaPanel extends Field
             $stored = json_decode($stored, true);
         }
 
+        $snapshot = [];
+
         foreach (is_array($stored) ? $stored : [] as $path => $raw) {
             // Not normalised: a file whose entry holds only details this field does not collect still
             // gets its slot, which marks it as stored (see exportForColumn()). Reads normalise it.
@@ -232,7 +248,15 @@ class ImageMetaPanel extends Field
 
             if (!$meta->isEmpty()) {
                 $slots[self::slotForIdentifier((string) $path)] = $meta->toArray();
+                $snapshot[self::slotForIdentifier((string) $path)] = $meta->toArray();
             }
+        }
+
+        if ($snapshot !== []) {
+            $json = (string) json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+            // Signed: the state travels through the browser, so an unsigned snapshot could be forged.
+            $slots[self::STORED] = ['json' => $json, 'sig' => $this->signSnapshot($json)];
         }
 
         return $slots;
@@ -258,7 +282,7 @@ class ImageMetaPanel extends Field
         $this->getUpload()->saveUploadedFiles();
 
         $slots = $this->syncSlots();
-        $stored = $this->storedInColumn();
+        $stored = $this->storedSnapshot();
         $out = [];
 
         foreach ($this->getUpload()->getRawState() ?? [] as $key => $file) {
@@ -266,9 +290,10 @@ class ImageMetaPanel extends Field
                 continue;
             }
 
-            $previous = array_key_exists(self::slotForIdentifier($file), $before) ? ($stored[$file] ?? null) : null;
+            $identifier = self::slotForIdentifier($file);
+            $previous = array_key_exists($identifier, $before) ? ($stored[$identifier] ?? null) : null;
             $meta = $this->options->keepUnmanaged(
-                $this->options->limitTexts($this->lookup($slots, $key, $file), $stored[$file] ?? null),
+                $this->options->limitTexts($this->lookup($slots, $key, $file), $stored[$identifier] ?? null),
                 $previous,
             );
 
@@ -281,15 +306,67 @@ class ImageMetaPanel extends Field
     }
 
     /**
-     * The details as they are stored in the record's column now, keyed by file path.
+     * The details as they are stored now, keyed by identifier slot. A record that has the column
+     * is the truth, never the browser's copy of the state. Inside a Repeater or Builder item
+     * (JSON, no relationship) the record is the parent: it has no such column, or has an unrelated
+     * one of the same name; there the snapshot taken when the form was filled stands in.
      *
      * @return array<string, ImageMeta>
      */
-    protected function storedInColumn(): array
+    protected function storedSnapshot(): array
     {
+        $out = [];
         $record = $this->getRecord();
 
-        return $record instanceof Model ? ImageMeta::allFor($record, $this->getName(), $this->getName()) : [];
+        if ($record instanceof Model && !$this->isInsideRepeatable() && array_key_exists($this->getName(), $record->getAttributes())) {
+            foreach (ImageMeta::allFor($record, $this->getName(), $this->getName()) as $path => $meta) {
+                $out[self::slotForIdentifier((string) $path)] = $meta;
+            }
+
+            return $out;
+        }
+
+        // The snapshot is trusted only with the signature made on hydrate (the state is
+        // browser-controlled): a forged or tampered one counts as "nothing stored", the safe side.
+        $entry = $this->slots()[self::STORED] ?? null;
+        $json = is_array($entry) ? ($entry['json'] ?? null) : null;
+        $sig = is_array($entry) ? ($entry['sig'] ?? null) : null;
+
+        if (!is_string($json) || !is_string($sig) || !hash_equals($this->signSnapshot($json), $sig)) {
+            return $out;
+        }
+
+        $snapshot = json_decode($json, true);
+
+        foreach (is_array($snapshot) ? $snapshot : [] as $slot => $raw) {
+            $out[(string) $slot] = ImageMeta::fromArray($raw);
+        }
+
+        return $out;
+    }
+
+    /**
+     * Whether the panel sits in a Repeater or a Builder item, however many plugin or layout
+     * wrappers (the Group of ImageMetaUpload, a Section, ...) lie in between.
+     */
+    protected function isInsideRepeatable(): bool
+    {
+        $component = $this->getContainer()->getParentComponent();
+
+        while ($component instanceof Component) {
+            if ($component instanceof Repeater || $component instanceof Builder || $component instanceof Block) {
+                return true;
+            }
+
+            $component = $component->getContainer()->getParentComponent();
+        }
+
+        return false;
+    }
+
+    protected function signSnapshot(string $json): string
+    {
+        return hash_hmac('sha256', $this->getName().'|'.$json, (string) config('app.key'));
     }
 
     /**
@@ -326,6 +403,7 @@ class ImageMetaPanel extends Field
             }
         }
 
+        $live[self::STORED] = true;
         $synced = array_intersect_key($synced, $live);
 
         if ($synced !== $slots) {
@@ -423,7 +501,7 @@ class ImageMetaPanel extends Field
      */
     public function getRows(): array
     {
-        $files = $this->getUpload()->getUploadedFiles() ?? [];
+        $files = $this->uploadedFiles();
         $slots = $this->slots();
         $rows = [];
 
@@ -446,6 +524,110 @@ class ImageMetaPanel extends Field
         }
 
         return $rows;
+    }
+
+    /**
+     * What the upload reports about its files (name, size, type, URL). For a stored file that
+     * costs a size and a mime type request to the disk, and a signed URL on a private one, so
+     * it is read once per state: every render, and every opening of the modal, shares it.
+     *
+     * @return array<int|string, mixed>
+     */
+    protected function uploadedFiles(): array
+    {
+        $upload = $this->getUpload();
+
+        $signature = md5((string) json_encode(array_map(
+            static fn (mixed $file): string => $file instanceof TemporaryUploadedFile ? 'tmp:'.$file->getFilename() : (string) json_encode($file),
+            $upload->getRawState() ?? [],
+        )));
+
+        if ($this->uploadedFilesCache === null || $this->uploadedFilesCache[0] !== $signature) {
+            $this->uploadedFilesCache = [$signature, $upload->getUploadedFiles() ?? []];
+        }
+
+        return $this->uploadedFilesCache[1];
+    }
+
+    /**
+     * The names of the images that still need alt text, for the `requireAlt` rule. Unlike
+     * {@see getRows()} it asks the disk for nothing: a stored file is an image by its extension,
+     * a media item by the row of the media table.
+     *
+     * @return array<int, string>
+     */
+    public function filesMissingAlt(): array
+    {
+        $upload = $this->getUpload();
+        $files = $upload->getRawState() ?? [];
+        $slots = $this->slots();
+        $media = [];
+
+        if ($this->storesInMedia) {
+            $record = $upload->getRecord();
+
+            if ($record instanceof Model && $record instanceof HasMedia) {
+                foreach ($this->mediaOf($record) as $item) {
+                    $media[(string) $item->uuid] = $item;
+                }
+            }
+        }
+
+        $names = [];
+
+        foreach ($files as $key => $file) {
+            if ($file instanceof TemporaryUploadedFile) {
+                $name = $file->getClientOriginalName();
+                $image = Str::startsWith((string) $file->getMimeType(), 'image/');
+            } elseif (is_string($file) && $file !== '' && $this->storesInMedia) {
+                $item = $media[$file] ?? null;
+
+                if (!$item instanceof Media) {
+                    continue;
+                }
+
+                $name = (string) $item->file_name;
+                $image = Str::startsWith((string) $item->mime_type, 'image/');
+            } elseif (is_string($file) && $file !== '') {
+                $name = basename($file);
+                $image = $this->isImageName($name) ?? Str::startsWith((string) ($this->uploadedFiles()[$key]['type'] ?? ''), 'image/');
+            } else {
+                continue;
+            }
+
+            if ($image && $this->statusOf($this->lookup($slots, $key, $file)) === 'missing') {
+                $names[] = $name;
+            }
+        }
+
+        return $names;
+    }
+
+    /**
+     * Whether a file name is an image by its extension; null when the extension says nothing
+     * (none, or not a known image one), so the caller may ask the disk's mime type instead.
+     */
+    protected function isImageName(string $name): ?bool
+    {
+        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+
+        return in_array($extension, ['jpg', 'jpeg', 'jpe', 'jfif', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp', 'heic', 'heif', 'tif', 'tiff', 'ico'], true) ? true : null;
+    }
+
+    /**
+     * The language whose alt text a row shows under the file name: the interface language when
+     * the field manages it, else the first language that is required, so that the preview
+     * matches the badge. A language-less field shows its one text.
+     */
+    public function previewLocale(): string
+    {
+        $o = $this->options;
+
+        if (!$o->isLocalised()) {
+            return ImageMeta::ANY;
+        }
+
+        return in_array(app()->getLocale(), $o->locales, true) ? app()->getLocale() : $o->altLocalesRequired()[0];
     }
 
     /**
@@ -472,7 +654,7 @@ class ImageMetaPanel extends Field
 
         $isImage = is_string($type) && $type !== ''
             ? Str::startsWith($type, 'image/')
-            : in_array(strtolower(pathinfo($name, PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'svg', 'bmp'], true);
+            : $this->isImageName($name) === true;
 
         return ['name' => $name, 'url' => $uploaded['url'] ?? null, 'image' => $isImage];
     }
@@ -491,7 +673,7 @@ class ImageMetaPanel extends Field
         }
 
         foreach ($this->options->altLocalesRequired() as $locale) {
-            if (!$meta->hasAlt($locale)) {
+            if (!$meta->hasOwnAlt($locale)) {
                 return 'missing';
             }
         }
@@ -521,7 +703,7 @@ class ImageMetaPanel extends Field
             })
             ->action(function (array $data, array $arguments, self $component): void {
                 $key = $component->resolveKey($arguments);
-                $meta = $component->options->normalise($data);
+                $meta = $component->keepUntouchedTexts($component->options->normalise($data), $data, $key);
                 $file = ($component->getUpload()->getRawState() ?? [])[$key] ?? null;
 
                 $candidates = self::slotsFor($key, $file);
@@ -549,6 +731,36 @@ class ImageMetaPanel extends Field
                 $component->rawState($slots === [] ? [] : $slots);
                 $component->callAfterStateUpdated();
             });
+    }
+
+    /**
+     * A field without `locales` shows one text per detail: the language-less one, or else the
+     * first language of a text another site wrote per language. Submitting the modal without
+     * touching such a text must not collapse that map into the one string shown, so a text equal
+     * to what the modal was filled with keeps the stored map. Only an edited text replaces it.
+     *
+     * @param array<string, mixed> $data
+     */
+    protected function keepUntouchedTexts(ImageMeta $meta, array $data, string $key): ImageMeta
+    {
+        $o = $this->options;
+
+        if ($o->isLocalised()) {
+            return $meta;
+        }
+
+        $current = $this->metaForKey($key);
+        $filled = $this->formDataFor($key);
+
+        $untouched = static fn (string $name): bool => trim((string) ($data[$name] ?? '')) === trim((string) ($filled[$name] ?? ''));
+
+        return new ImageMeta(
+            alt: $meta->decorative ? [] : ($o->alt && $untouched('alt') ? $current->alt : $meta->alt),
+            decorative: $meta->decorative,
+            caption: $o->caption && $untouched('caption') ? $current->caption : $meta->caption,
+            title: $o->title && $untouched('title') ? $current->title : $meta->title,
+            focal: $meta->focal,
+        );
     }
 
     /**

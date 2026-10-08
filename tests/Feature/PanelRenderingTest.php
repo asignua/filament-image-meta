@@ -219,4 +219,27 @@ class PanelRenderingTest extends TestCase
 
         $this->assertNull($html);
     }
+
+    public function test_the_row_previews_the_alt_text_of_a_language_the_field_manages(): void
+    {
+        app()->setLocale('en');
+
+        $form = $this->form(['locales' => ['uk', 'pl']]);
+        $key = $this->withUpload($form);
+        $form->callAction($this->action($key), ['alt' => ['uk' => 'Двері', 'pl' => 'Drzwi']]);
+
+        $form->assertSee('Двері')->assertDontSee('Drzwi');
+    }
+
+    public function test_the_row_does_not_preview_another_language_through_the_fallback(): void
+    {
+        app()->setLocale('en');
+        config(['image-meta.fallback_locale' => 'pl']);
+
+        $form = $this->form(['locales' => ['uk', 'pl'], 'requiredLocales' => ['uk']]);
+        $key = $this->withUpload($form);
+        $form->callAction($this->action($key), ['alt' => ['uk' => '', 'pl' => 'Drzwi']]);
+
+        $form->assertDontSee('Drzwi');
+    }
 }

@@ -8,6 +8,7 @@ use Asignua\FilamentImageMeta\Forms\ImageMetaPanel;
 use Asignua\FilamentImageMeta\Tests\TestCase;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Features\SupportTesting\Testable;
 use Livewire\Livewire;
@@ -417,7 +418,7 @@ class PlainUploadTest extends TestCase
 
         $this->assertSame('posts/seed.jpg', $post->refresh()->photo);
         $this->assertSame(['posts/seed.jpg' => ['alt' => 'New']], $post->photo_meta);
-        $this->assertSame([ImageMetaPanel::slotForIdentifier('posts/seed.jpg') => ['alt' => 'New']], $form->get('data.photo_meta'));
+        $this->assertSame([ImageMetaPanel::slotForIdentifier('posts/seed.jpg') => ['alt' => 'New']], Arr::except($form->get('data.photo_meta'), ImageMetaPanel::STORED));
     }
 
     public function test_a_file_re_uploaded_under_the_same_path_without_details_has_none(): void
@@ -476,5 +477,73 @@ class PlainUploadTest extends TestCase
         $form->call('save')->assertHasNoErrors();
 
         $this->assertSame(['posts/seed.jpg' => ['alt' => $long]], $post->refresh()->photo_meta);
+    }
+
+    public function test_applying_the_modal_of_a_language_less_field_keeps_texts_written_per_language(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill([
+            'photo' => 'posts/seed.jpg',
+            'photo_meta' => ['posts/seed.jpg' => ['alt' => ['en' => 'A red door', 'uk' => 'Червоні двері'], 'caption' => ['en' => 'C', 'uk' => 'К']]],
+        ])->save();
+
+        $form = $this->form(['caption' => true, 'focalPoint' => true], $post);
+        $key = (string) array_key_first($form->get('data.photo'));
+
+        $this->edit($form, $key, ['alt' => 'A red door', 'caption' => 'C', 'focal' => ['x' => 10, 'y' => 20]]);
+        $form->call('save')->assertHasNoErrors();
+
+        $meta = $post->refresh()->photo_meta['posts/seed.jpg'];
+
+        $this->assertSame(['en' => 'A red door', 'uk' => 'Червоні двері'], $meta['alt']);
+        $this->assertSame(['en' => 'C', 'uk' => 'К'], $meta['caption']);
+        $this->assertEquals(['x' => 10, 'y' => 20], $meta['focal']);
+    }
+
+    public function test_editing_the_text_of_a_language_less_field_replaces_the_map(): void
+    {
+        Storage::disk('public')->put('posts/seed.jpg', (string) UploadedFile::fake()->image('seed.jpg')->getContent());
+        $post = new Post;
+        $post->forceFill(['photo' => 'posts/seed.jpg', 'photo_meta' => ['posts/seed.jpg' => ['alt' => ['en' => 'A red door', 'uk' => 'Двері']]]])->save();
+
+        $form = $this->form([], $post);
+        $key = (string) array_key_first($form->get('data.photo'));
+
+        $this->edit($form, $key, ['alt' => 'A blue door']);
+        $form->call('save')->assertHasNoErrors();
+
+        $this->assertSame('A blue door', $post->refresh()->photo_meta['posts/seed.jpg']['alt']);
+    }
+
+    /**
+     * Signed with the app key, as a valid snapshot would be: only the column path may save it from trust.
+     */
+    private function validSignature(string $json): string
+    {
+        return hash_hmac('sha256', 'photo_meta|'.$json, (string) config('app.key'));
+    }
+
+    public function test_a_forged_stored_snapshot_in_the_state_does_not_lift_the_text_limit_or_inject_texts(): void
+    {
+        $post = $this->storedPost('Short');
+        config()->set('image-meta.alt_max_length', 10);
+
+        $long = str_repeat('b', 50);
+        $slot = ImageMetaPanel::slotForIdentifier('posts/seed.jpg');
+        $forged = [$slot => ['alt' => $long, 'caption' => 'Forged', 'title' => 'Forged']];
+        $form = $this->form([], $post);
+
+        // Straight into the state, past the modal and its field validation.
+        $form->set('data.photo_meta.'.ImageMetaPanel::STORED, ['json' => json_encode($forged), 'sig' => $this->validSignature(json_encode($forged))]);
+        $form->set('data.photo_meta.'.$slot, ['alt' => $long]);
+        $form->call('save');
+
+        $meta = $post->refresh()->photo_meta['posts/seed.jpg'] ?? [];
+        $alt = $meta['alt'] ?? '';
+
+        $this->assertLessThanOrEqual(10, mb_strlen(is_array($alt) ? (string) reset($alt) : $alt));
+        $this->assertArrayNotHasKey('caption', $meta);
+        $this->assertArrayNotHasKey('title', $meta);
     }
 }

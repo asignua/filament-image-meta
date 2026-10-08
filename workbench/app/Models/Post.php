@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property array<string, mixed>|null $photo_meta
  * @property array<int, string>|null $gallery
  * @property array<string, mixed>|null $gallery_meta
+ * @property array<int|string, mixed>|null $blocks
  */
 class Post extends Model
 {
@@ -26,6 +27,7 @@ class Post extends Model
             'photo_meta' => 'array',
             'gallery' => 'array',
             'gallery_meta' => 'array',
+            'blocks' => 'array',
         ];
     }
 }

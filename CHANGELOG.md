@@ -2,6 +2,17 @@
 
 All notable changes to `asignua/filament-image-meta` are documented here.
 
+## Unreleased
+
+- Dependencies: esbuild 0.28 (dev); the built asset is unchanged.
+- A field outside a Repeater or Builder item (however many Sections or wrappers it sits in) compares a save with the record's stored column, not with the state the browser holds, so the text length limit cannot be lifted nor foreign texts injected by writing the reserved `_stored` key; the `requireAlt` rule also recognises stored images with other extensions (`heic`, `tif`, …) and, with no extension, asks the upload's mime type.
+- `requireAlt` now checks images that are already stored too, not only the files uploaded in the current request: it is a rule of the details panel (always present in the form), so an existing record with an undescribed image, or one whose alt text was cleared in the modal, no longer saves silently, on both storages. The error is shown on the panel, which now sits in the field wrapper. With `requireAlt` off, no empty rule reaches the validator any more (no PHP deprecation per upload).
+- An upload inside a Repeater or Builder item (JSON, no relationship) keeps the details it does not collect and the stored long texts on save: the stored snapshot lives in the panel's own state (reserved key `_stored`) instead of being read from the parent record; it is HMAC-signed (app key, bound to the field name (the state path is not stable: a Repeater re-keys its items after hydration)), and a missing or forged snapshot counts as "nothing stored".
+- A required language counts as described only by its own alt text (or a language-less one); `fallback_locale` is for rendering only and no longer makes the badge say "Alt text set" or lets `requireAlt` pass. New `ImageMeta::ownAlt()` and `hasOwnAlt()`.
+- Applying the modal of a field without `locales` no longer collapses alt text, caption or title written per language into one string: a text that was not edited keeps the stored map.
+- The panel reads the upload's files once per state instead of on every render, rule run and modal opening (no repeated size, mime type and URL requests per file on remote disks); the `requireAlt` rule asks the disk for nothing.
+- The alt text under a file name is shown in a language the field manages (the interface language, else the first required one), so it matches the badge.
+
 ## v1.0.1 - 2026-10-05
 
 - A save keeps the alt, caption and title texts in languages outside the field's `locales` (an earlier language list, texts written by another tool), on both storages; before, every save rewrote each file's texts with the configured languages only.

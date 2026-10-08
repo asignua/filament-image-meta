@@ -174,4 +174,23 @@ class ImageMetaTest extends TestCase
         // A real language still gets no text from another one.
         $this->assertNull($meta->alt('uk'));
     }
+
+    public function test_own_alt_ignores_the_fallback_locale(): void
+    {
+        config(['image-meta.fallback_locale' => 'en']);
+
+        $meta = ImageMeta::fromArray(['alt' => ['en' => 'A door']]);
+
+        $this->assertTrue($meta->hasAlt('uk'));
+        $this->assertFalse($meta->hasOwnAlt('uk'));
+        $this->assertTrue($meta->hasOwnAlt('en'));
+        $this->assertSame('A door', $meta->ownAlt('en'));
+    }
+
+    public function test_own_alt_accepts_a_language_less_text_and_nothing_when_decorative(): void
+    {
+        $this->assertTrue(ImageMeta::fromArray(['alt' => 'A door'])->hasOwnAlt('uk'));
+        $this->assertTrue(ImageMeta::fromArray(['alt' => ['uk' => 'Двері']])->hasOwnAlt(ImageMeta::ANY));
+        $this->assertFalse(ImageMeta::fromArray(['alt' => 'A door', 'decorative' => true])->hasOwnAlt('uk'));
+    }
 }

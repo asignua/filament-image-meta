@@ -6,6 +6,6 @@
         "dev": "esbuild resources/js/focal-point.js --bundle --format=esm --outfile=resources/dist/focal-point.js --watch"
     },
     "devDependencies": {
-        "esbuild": "^0.25.0"
+        "esbuild": "^0.28.2"
     }
 }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Asignua\FilamentImageMeta;
 
 use Asignua\FilamentImageMeta\Forms\ImageMetaPanel;
+use Asignua\FilamentImageMeta\Rules\AltRequired;
 use Closure;
 use Filament\Forms\Components\BaseFileUpload;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
@@ -84,20 +85,18 @@ final class ImageMetaUpload
         }
 
         if ($alt) {
-            $upload->rule(static function (BaseFileUpload $component) use ($options): ?Closure {
-                $panel = ImageMetaPanel::siblingOf($component);
+            // On the panel, not on the upload: the upload's own rules run only over the files
+            // uploaded in this request, so an image that is already stored (or whose alt text was
+            // cleared in the modal) would slip through. The panel always has its own state path.
+            // Evaluated against the upload, which is what `requireAlt` closures are written for.
+            $panel->rule(static function (ImageMetaPanel $panel) use ($options): array {
+                $upload = $panel->getUpload();
 
-                if (!$panel instanceof ImageMetaPanel || !(bool) $component->evaluate($options->requireAlt)) {
-                    return null;
+                if ($upload->isDisabled() || $upload->isHidden() || !(bool) $upload->evaluate($options->requireAlt)) {
+                    return [];
                 }
 
-                return static function (string $attribute, mixed $value, Closure $fail) use ($panel): void {
-                    foreach ($panel->getRows() as $row) {
-                        if ($panel->statusOf($row['meta']) === 'missing') {
-                            $fail(__('image-meta::image-meta.alt_required', ['file' => $row['name']]));
-                        }
-                    }
-                };
+                return [new AltRequired($panel->filesMissingAlt(...))];
             });
         }
 

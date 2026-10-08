@@ -187,6 +187,33 @@ final readonly class ImageMeta
     }
 
     /**
+     * The alt text written in exactly this language (or language-less), ignoring the config
+     * `image-meta.fallback_locale`. The fallback decides what is RENDERED; it must not decide
+     * whether a required language has been described, see {@see hasOwnAlt()}.
+     */
+    public function ownAlt(?string $locale = null): ?string
+    {
+        if ($this->decorative) {
+            return null;
+        }
+
+        $locale ??= app()->getLocale();
+
+        $text = $this->alt[$locale] ?? $this->alt[self::ANY] ?? null;
+
+        if ($text === null && $locale === self::ANY) {
+            $text = Arr::first($this->alt, static fn (string $value): bool => $value !== '');
+        }
+
+        return ($text === null || $text === '') ? null : $text;
+    }
+
+    public function hasOwnAlt(?string $locale = null): bool
+    {
+        return $this->ownAlt($locale) !== null;
+    }
+
+    /**
      * True for an image that is neither decorative nor described: the thing an audit looks for.
      */
     public function isMissingAlt(?string $locale = null): bool
