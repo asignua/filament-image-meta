@@ -2,6 +2,11 @@
 
 All notable changes to `asignua/filament-image-meta` are documented here.
 
+## v1.0.3 - 2026-10-25
+
+- Screenshots and the cover carry the «made in asign» mark; README shows the Stand With Ukraine badge.
+- Dependency updates (CI actions, dev tooling).
+
 ## v1.0.2 - 2026-10-08
 
 - Dependencies: esbuild 0.28 (dev); the built asset is unchanged.

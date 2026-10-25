@@ -7,7 +7,7 @@
 [![License](https://img.shields.io/packagist/l/asignua/filament-image-meta.svg?style=flat-square)](https://github.com/asignua/filament-image-meta/blob/main/LICENSE.md)
 [![Plumb score](https://plumbphp.dev/badges/asignua/filament-image-meta/composite.svg)](https://plumbphp.dev/asignua/filament-image-meta)
 
-<img class="filament-hidden" src="https://raw.githubusercontent.com/asignua/filament-image-meta/v1.0.0/art/cover.jpg" alt="Filament Image Meta">
+<img class="filament-hidden" src="https://raw.githubusercontent.com/asignua/filament-image-meta/v1.0.3/art/cover.jpg" alt="Filament Image Meta">
 
 Per-file **alt text**, a **decorative** flag, **caption**, **title** and a **focal point** for Filament 5's own `FileUpload`
 and `SpatieMediaLibraryFileUpload`: one wrapper around the upload you already have, no media system to adopt.
@@ -45,9 +45,9 @@ with an accessibility and SEO point of view:
 
 ## Screenshots
 
-![Upload row with alt text and status badges](https://raw.githubusercontent.com/asignua/filament-image-meta/v1.0.0/art/upload-row.jpg)
+![Upload row with alt text and status badges](https://raw.githubusercontent.com/asignua/filament-image-meta/v1.0.3/art/upload-row.jpg)
 
-![The details modal with alt per language and the focal-point picker](https://raw.githubusercontent.com/asignua/filament-image-meta/v1.0.0/art/details-modal.jpg)
+![The details modal with alt per language and the focal-point picker](https://raw.githubusercontent.com/asignua/filament-image-meta/v1.0.3/art/details-modal.jpg)
 
 ## Requirements
 
