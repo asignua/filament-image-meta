@@ -273,6 +273,15 @@ The Alpine component is built with `npm install && npm run build` (esbuild; `res
 
 See [CHANGELOG](https://github.com/asignua/filament-image-meta/blob/main/CHANGELOG.md).
 
+## More plugins by asign
+
+- [Image Annotations](https://filamentphp.com/plugins/asign-image-annotations) — draw and annotate images
+- [Rich Editor Toolkit](https://filamentphp.com/plugins/asign-rich-editor-toolkit) — paste cleanup, attributes and video links in the rich editor
+- [SEO Files](https://filamentphp.com/plugins/asign-seo-files) — sitemap, robots.txt and llms.txt
+- [Themes](https://filamentphp.com/plugins/asign-themes) — per-user and per-panel colour themes
+
+All plugins: <https://filamentphp.com/plugins?q=asign>
+
 ## License
 
 The MIT License (MIT). See [LICENSE](https://github.com/asignua/filament-image-meta/blob/main/LICENSE.md).
