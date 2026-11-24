@@ -282,6 +282,8 @@ See [CHANGELOG](https://github.com/asignua/filament-image-meta/blob/main/CHANGEL
 
 All plugins: <https://filamentphp.com/plugins?q=asign>
 
+Catalogue of free and commercial plugins: <https://asign.tech/en/plugins>
+
 ## License
 
 The MIT License (MIT). See [LICENSE](https://github.com/asignua/filament-image-meta/blob/main/LICENSE.md).
